@@ -75,5 +75,54 @@ def calc_loss(img,mdoel):
     losses = []
     for act in layer_activations:
         loss = tf.reduce_mean(act)
+        losses.append(loss)
+    return tf.reduce_sum(losses)
         
+# gradient ascent
+# once have calculate the loss for the chosen layers ,all that is left
+# is to calcuulate the gradients with respect to the image,
+# and add them to the original image
+# adding the gradients to the image enhances the pattern seen
+# by the network.At each step , u will have created an image
+# that increasingly excites the activations of certain layers
+# in the network
+@tf.function
+def deepdream(model,img,step_size):
+    with tf.GradientTape() as tape:
+        # this needs gradients relative to img
+        # gradienttape only watches tf.Variable's by default
+        tape.watch(img)
+        loss = calc_loss(img,model)
+    # calculate the gradient of the loss with respect to
+    # the pixels of the input image
+    gradients = tape.gradient(loss,img)
+    # normalize the gradient
+    gradients /= tf.math.reduce_std(gradients) + 1e-8
+
+    # in gradient ascent . the loss is maximized so that the
+    # input image increasingly excites the layers
+    # u cna update the image by directly adding the gradients
+    # because they arer the same shape
+    img = img + gradients*step_size
+    img = tf.clip_by_value(img,-1,1)
+    return loss , img
+
+def run_deep_dream_simple(model,img,steps=100,step_size=0.01):
+    # convert from unit8 to the range expected by the model
+    img = tf.keras.applications.inception_v3.preprocess_input(img)
+
+    for step in range(steps):
+        loss, img = deepdream(model,img,step_size)
+
+        if step%100 == 0:
+            clear_output(wait=True)
+            show(deprocess(img))
+            print("step:{},loss{}".format(step,loss))
+
+    result = deprocess(img )
+    clear_output(wait=True)
+    show(result)
+    return result
+dream_img = run_deep_dream_simple(model=dream_model,img=original_img,
+                                  steps=800,step_size=0.001)
 
